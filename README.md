@@ -4,7 +4,7 @@ A smart dashboard built with **Streamlit**, **Google Classroom API**, and **Open
 
 ---
 
-## 🔥 Features
+## Features
 
 - 📅 **Assignment Tracker**: Pulls live data from Google Classroom – shows pending, submitted, and upcoming assignments.
 - 🎓 **Class & Seminar Info**: Displays classes you should attend and upcoming academic events.
@@ -15,7 +15,7 @@ A smart dashboard built with **Streamlit**, **Google Classroom API**, and **Open
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - [Streamlit](https://streamlit.io/) – UI framework
 - [OpenAI GPT (via LangChain)](https://openai.com/) – for natural language Q&A
@@ -25,7 +25,7 @@ A smart dashboard built with **Streamlit**, **Google Classroom API**, and **Open
 
 ---
 
-## ⚙️ Installation
+## Installation
 
 ### 1. Clone the Repository
 
@@ -62,11 +62,11 @@ GOOGLE_CLIENT_SECRET_FILE=credentials.json
 
 ---
 
-## 🚀 Run the App
+## Run the App
 
 ```streamlit run app.py```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ├── app.py                 # Streamlit app
@@ -79,7 +79,7 @@ GOOGLE_CLIENT_SECRET_FILE=credentials.json
 ├── README.md              # This file
 ```
 
-## 🎯 Example Queries for Chatbot
+## Example Queries for Chatbot
 - "What assignments are pending for me this week?"
 - "Explain PCA with an example."
 - "What is the latest Leetcode problem I should try?"
