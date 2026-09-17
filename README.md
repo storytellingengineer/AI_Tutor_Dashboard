@@ -1,22 +1,20 @@
 # AI Tutor Dashboard
 
-A Streamlit learning workspace powered by an LLM. It turns a topic and learning goal into explanations, quizzes, interview practice, revision notes, study plans, and practice follow-ups.
+A Streamlit learning workspace powered by an LLM. It supports explanations, quizzes, interviews, revision, study plans, persistent learner profiles, and notes-assisted tutoring.
 
-## Current milestone: v0.2 — Learning Workspace
+## Current milestone: v0.3 — Persistent Learning Workspace
 
 ### Features
 
-- Learner-level aware responses: Beginner, Intermediate, Advanced
+- Learner profile with name, level, and learning goal
+- Persistent SQLite storage for profile and learning sessions
 - Six learning modes: Explain, Quiz, Interview, Study Plan, Revision, Practice Follow-up
-- Topic-aware tutoring prompts
+- TXT and PDF notes upload using `pypdf`
+- Notes context included in tutor prompts
 - Configurable OpenAI model through `OPENAI_MODEL`
-- Session-based learning history
 - Downloadable Markdown tutor responses
-- Practice follow-ups based on the latest generated response
-- Clear learning-history control
-- Simple, responsive Streamlit interface
-
-> Learning history is stored in Streamlit session state and is cleared when the session restarts or the history is manually cleared. Persistent learner profiles are planned for a future milestone.
+- Saved learning history across app restarts
+- Clear saved-history control
 
 ## Run locally
 
@@ -33,33 +31,35 @@ $env:OPENAI_API_KEY="your_key_here"
 streamlit run app.py
 ```
 
-You can override the default model with `OPENAI_MODEL`.
+The SQLite database (`ai_tutor.db`) is created automatically beside `app.py` and should be kept local. Do not commit learner data or API keys.
 
 ## Project structure
 
 ```text
 .
 ├── app.py
+├── learning_store.py
 ├── requirements.txt
 └── README.md
 ```
 
-## Suggested learning workflow
+## Suggested workflow
 
-1. Choose your level and topic.
-2. Generate an explanation or study plan.
-3. Create a practice follow-up.
-4. Attempt the exercises without assistance.
-5. Review mistakes and repeat with the Revision mode.
+1. Save your learner profile and learning goal.
+2. Upload TXT or PDF notes.
+3. Ask for an explanation, quiz, interview, or revision session.
+4. Generate practice follow-ups.
+5. Review saved sessions and repeat.
 
 ## Roadmap
 
 - [x] Core tutoring modes
-- [x] Session learning history
-- [x] Practice follow-ups
+- [x] Persistent learner profiles
+- [x] Persistent learning history
+- [x] TXT/PDF notes ingestion
+- [x] Notes-assisted tutoring context
 - [x] Markdown export
-- [ ] Persistent learner profiles
-- [ ] PDF/notes ingestion and RAG
+- [ ] Chunked retrieval and embeddings-based RAG
 - [ ] Quiz answer submission and scoring
 - [ ] Progress analytics
 - [ ] Authentication and multi-user deployment
