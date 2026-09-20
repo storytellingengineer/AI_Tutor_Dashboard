@@ -1,13 +1,18 @@
+import io
 import os
 from datetime import datetime, timezone
 from typing import Literal
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from pypdf import PdfReader
 
-app = FastAPI(title="AI Tutor API", version="0.5.0")
+from rag import InMemoryRetriever, format_context
+
+app = FastAPI(title="AI Tutor API", version="0.6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,31 +22,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+retriever = InMemoryRetriever()
+
 
 class TutorRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=12000)
     topic: str = Field(default="General", max_length=200)
     mode: Literal["Explain", "Quiz", "Interview", "Study Plan", "Revision"] = "Explain"
     level: Literal["Beginner", "Intermediate", "Advanced"] = "Beginner"
+    top_k: int = Field(default=5, ge=1, le=10)
 
 
-def build_instructions(request: TutorRequest) -> str:
+def build_instructions(request: TutorRequest, context: str) -> str:
+    grounding = (
+        "Use the retrieved study material when relevant. If it does not contain the answer, "
+        "say so and clearly distinguish general knowledge from source-grounded content.\n\n"
+        f"Retrieved study material:\n{context or '[No study material retrieved]'}"
+    )
     return (
         "You are a structured AI tutor. Teach clearly, accurately, and practically. "
         f"The learner's level is {request.level}. The topic is {request.topic}. "
         f"The requested mode is {request.mode}. Adapt depth and examples to the level. "
-        "Use headings and concise examples. Encourage active recall where appropriate."
+        "Use headings and concise examples. Encourage active recall where appropriate.\n\n"
+        + grounding
     )
 
 
 @app.get("/")
 def root() -> dict:
-    return {"service": "ai-tutor-api", "version": "0.5.0", "status": "ok"}
+    return {"service": "ai-tutor-api", "version": "0.6.0", "status": "ok"}
 
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "chunks": retriever.count()}
+
+
+@app.post("/api/v1/documents")
+async def upload_document(file: UploadFile = File(...)) -> dict:
+    raw = await file.read()
+    filename = file.filename or "uploaded-document"
+    try:
+        if filename.lower().endswith(".pdf") or file.content_type == "application/pdf":
+            reader = PdfReader(io.BytesIO(raw))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        else:
+            text = raw.decode("utf-8")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Could not parse the uploaded document") from exc
+
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="The uploaded document contains no readable text")
+
+    document_id = str(uuid4())
+    chunks = retriever.add_document(document_id, filename, text)
+    return {"status": "success", "document_id": document_id, "source": filename, "chunks_created": chunks}
+
+
+@app.post("/api/v1/retrieve")
+def retrieve(request: TutorRequest) -> dict:
+    chunks = retriever.retrieve(request.prompt, request.top_k)
+    return {
+        "status": "success",
+        "matches": [
+            {"document_id": c.document_id, "source": c.source, "chunk_id": c.chunk_id, "text": c.text}
+            for c in chunks
+        ],
+    }
 
 
 @app.post("/api/v1/tutor")
@@ -50,13 +98,14 @@ def tutor(request: TutorRequest) -> dict:
     if not api_key:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
 
+    context = format_context(retriever.retrieve(request.prompt, request.top_k))
     client = OpenAI(api_key=api_key)
     model = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 
     try:
         response = client.responses.create(
             model=model,
-            instructions=build_instructions(request),
+            instructions=build_instructions(request, context),
             input=request.prompt,
         )
     except Exception as exc:
@@ -68,6 +117,7 @@ def tutor(request: TutorRequest) -> dict:
         "mode": request.mode,
         "level": request.level,
         "model": model,
+        "retrieved_chunks": len(retriever.retrieve(request.prompt, request.top_k)),
         "answer": response.output_text,
     }
 
