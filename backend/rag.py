@@ -1,8 +1,10 @@
-"""Lightweight document chunking and lexical retrieval for the AI Tutor API."""
+"""Persistent chunking and optional embedding retrieval for the AI Tutor API."""
 
 from dataclasses import dataclass
 import re
 from typing import Iterable
+
+from persistent_store import PersistentStore, StoredChunk, cosine_similarity
 
 
 @dataclass(frozen=True)
@@ -11,59 +13,63 @@ class DocumentChunk:
     source: str
     chunk_id: int
     text: str
+    embedding: list[float] | None = None
 
 
-class InMemoryRetriever:
-    """Simple dependency-free retriever for the v0.6 foundation.
-
-    This store is intentionally process-local. Replace it with a persistent
-    vector store in a later version without changing the API contract.
-    """
-
-    def __init__(self) -> None:
-        self._chunks: list[DocumentChunk] = []
+class PersistentRetriever:
+    def __init__(self, store: PersistentStore | None = None) -> None:
+        self.store = store or PersistentStore()
+        self._embedder = None
 
     @staticmethod
     def _terms(text: str) -> set[str]:
         return {term for term in re.findall(r"[a-zA-Z0-9_]{2,}", text.lower())}
 
+    def _encode(self, texts: list[str]) -> list[list[float]] | None:
+        try:
+            if self._embedder is None:
+                from sentence_transformers import SentenceTransformer
+                self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            return [vector.tolist() for vector in self._embedder.encode(texts, normalize_embeddings=True)]
+        except Exception:
+            return None
+
     def add_document(self, document_id: str, source: str, text: str, chunk_size: int = 1200, overlap: int = 200) -> int:
         if chunk_size <= 0 or overlap < 0 or overlap >= chunk_size:
             raise ValueError("chunk_size must be positive and overlap must be smaller than chunk_size")
-
         words = text.split()
         step = chunk_size - overlap
-        chunks: list[DocumentChunk] = []
+        parts: list[str] = []
         for start in range(0, len(words), step):
-            part = " ".join(words[start : start + chunk_size]).strip()
+            part = " ".join(words[start:start + chunk_size]).strip()
             if part:
-                chunks.append(DocumentChunk(document_id, source, len(chunks), part))
+                parts.append(part)
             if start + chunk_size >= len(words):
                 break
-
-        self._chunks = [chunk for chunk in self._chunks if chunk.document_id != document_id]
-        self._chunks.extend(chunks)
-        return len(chunks)
+        embeddings = self._encode(parts)
+        chunks = [StoredChunk(document_id, source, i, part, embeddings[i] if embeddings else None) for i, part in enumerate(parts)]
+        return self.store.add_chunks(chunks)
 
     def retrieve(self, query: str, top_k: int = 5) -> list[DocumentChunk]:
-        query_terms = self._terms(query)
-        if not query_terms:
+        stored = self.store.all_chunks()
+        if not stored:
             return []
-
-        scored: list[tuple[int, DocumentChunk]] = []
-        for chunk in self._chunks:
-            overlap = len(query_terms & self._terms(chunk.text))
-            if overlap:
-                scored.append((overlap, chunk))
+        query_embedding = self._encode([query])
+        scored: list[tuple[float, StoredChunk]] = []
+        query_terms = self._terms(query)
+        for chunk in stored:
+            if query_embedding and chunk.embedding:
+                score = cosine_similarity(query_embedding[0], chunk.embedding)
+            else:
+                score = float(len(query_terms & self._terms(chunk.text)))
+            if score > 0:
+                scored.append((score, chunk))
         scored.sort(key=lambda item: item[0], reverse=True)
-        return [chunk for _, chunk in scored[:top_k]]
+        return [DocumentChunk(c.document_id, c.source, c.chunk_id, c.text, c.embedding) for _, c in scored[:top_k]]
 
     def count(self) -> int:
-        return len(self._chunks)
+        return self.store.count()
 
 
 def format_context(chunks: Iterable[DocumentChunk]) -> str:
-    return "\n\n".join(
-        f"[Source: {chunk.source} | Chunk: {chunk.chunk_id}]\n{chunk.text}"
-        for chunk in chunks
-    )
+    return "\n\n".join(f"[Source: {chunk.source} | Chunk: {chunk.chunk_id}]\n{chunk.text}" for chunk in chunks)
