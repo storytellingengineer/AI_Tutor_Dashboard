@@ -10,19 +10,11 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
-from rag import InMemoryRetriever, format_context
+from rag import PersistentRetriever, format_context
 
-app = FastAPI(title="AI Tutor API", version="0.6.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-retriever = InMemoryRetriever()
+app = FastAPI(title="AI Tutor API", version="0.7.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+retriever = PersistentRetriever()
 
 
 class TutorRequest(BaseModel):
@@ -34,23 +26,16 @@ class TutorRequest(BaseModel):
 
 
 def build_instructions(request: TutorRequest, context: str) -> str:
-    grounding = (
-        "Use the retrieved study material when relevant. If it does not contain the answer, "
-        "say so and clearly distinguish general knowledge from source-grounded content.\n\n"
-        f"Retrieved study material:\n{context or '[No study material retrieved]'}"
-    )
-    return (
-        "You are a structured AI tutor. Teach clearly, accurately, and practically. "
-        f"The learner's level is {request.level}. The topic is {request.topic}. "
-        f"The requested mode is {request.mode}. Adapt depth and examples to the level. "
-        "Use headings and concise examples. Encourage active recall where appropriate.\n\n"
-        + grounding
-    )
+    return ("You are a structured AI tutor. Teach clearly, accurately, and practically. "
+            f"The learner's level is {request.level}. The topic is {request.topic}. "
+            f"The requested mode is {request.mode}. Use headings and concise examples. "
+            "Use study material when relevant; if it is insufficient, say so.\n\n"
+            f"Retrieved study material:\n{context or '[No study material retrieved]'}")
 
 
 @app.get("/")
 def root() -> dict:
-    return {"service": "ai-tutor-api", "version": "0.6.0", "status": "ok"}
+    return {"service": "ai-tutor-api", "version": "0.7.0", "status": "ok"}
 
 
 @app.get("/health")
@@ -70,26 +55,17 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
             text = raw.decode("utf-8")
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Could not parse the uploaded document") from exc
-
-    text = text.strip()
-    if not text:
+    if not text.strip():
         raise HTTPException(status_code=400, detail="The uploaded document contains no readable text")
-
     document_id = str(uuid4())
     chunks = retriever.add_document(document_id, filename, text)
-    return {"status": "success", "document_id": document_id, "source": filename, "chunks_created": chunks}
+    return {"status": "success", "document_id": document_id, "source": filename, "chunks_created": chunks, "persistent": True}
 
 
 @app.post("/api/v1/retrieve")
 def retrieve(request: TutorRequest) -> dict:
     chunks = retriever.retrieve(request.prompt, request.top_k)
-    return {
-        "status": "success",
-        "matches": [
-            {"document_id": c.document_id, "source": c.source, "chunk_id": c.chunk_id, "text": c.text}
-            for c in chunks
-        ],
-    }
+    return {"status": "success", "matches": [{"document_id": c.document_id, "source": c.source, "chunk_id": c.chunk_id, "text": c.text} for c in chunks]}
 
 
 @app.post("/api/v1/tutor")
@@ -97,35 +73,16 @@ def tutor(request: TutorRequest) -> dict:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
-
-    context = format_context(retriever.retrieve(request.prompt, request.top_k))
+    chunks = retriever.retrieve(request.prompt, request.top_k)
     client = OpenAI(api_key=api_key)
     model = os.getenv("OPENAI_MODEL", "gpt-5-mini")
-
     try:
-        response = client.responses.create(
-            model=model,
-            instructions=build_instructions(request, context),
-            input=request.prompt,
-        )
+        response = client.responses.create(model=model, instructions=build_instructions(request, format_context(chunks)), input=request.prompt)
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Tutor model request failed") from exc
-
-    return {
-        "status": "success",
-        "topic": request.topic,
-        "mode": request.mode,
-        "level": request.level,
-        "model": model,
-        "retrieved_chunks": len(retriever.retrieve(request.prompt, request.top_k)),
-        "answer": response.output_text,
-    }
+    return {"status": "success", "topic": request.topic, "mode": request.mode, "level": request.level, "model": model, "retrieved_chunks": len(chunks), "answer": response.output_text}
 
 
 @app.post("/api/v1/tutor/preview")
 def tutor_preview(request: TutorRequest) -> dict:
-    return {
-        "status": "accepted",
-        "message": "Use /api/v1/tutor for live tutoring.",
-        "request": request.model_dump(),
-    }
+    return {"status": "accepted", "message": "Use /api/v1/tutor for live tutoring.", "request": request.model_dump()}
