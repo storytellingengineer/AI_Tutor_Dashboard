@@ -2,24 +2,25 @@
 
 A production-oriented AI learning workspace built around **Next.js + FastAPI**, designed for Vercel + Render deployment.
 
-## Current milestone: v0.7 — Persistent RAG foundation
+## Current milestone: v0.8 — Document workspace
 
 ### Architecture
 
-- **Frontend:** Next.js + React + TypeScript, deployed on Vercel
-- **Backend:** FastAPI, deployed on Render
+- **Frontend:** Next.js + React + TypeScript, deployable on Vercel
+- **Backend:** FastAPI, deployable on Render
 - **AI layer:** OpenAI Responses API with retrieved study context
 - **RAG:** Chunking, SQLite persistence, optional Sentence Transformers embeddings, and lexical fallback
 - **Storage:** SQLite by default via `AI_TUTOR_DB_PATH`
 
-### v0.7 changes
+### Current capabilities
 
 - Persistent document chunks stored in SQLite
 - Optional semantic retrieval using `all-MiniLM-L6-v2`
 - Lexical fallback if the embedding model is unavailable
-- PDF/TXT ingestion remains available through `/api/v1/documents`
-- Retrieval remains available through `/api/v1/retrieve`
-- Tutor responses use retrieved context
+- TXT/PDF ingestion through `/api/v1/documents`
+- Retrieval through `/api/v1/retrieve`
+- Tutor responses grounded in retrieved context
+- Next.js frontend document upload flow
 
 ## Run locally
 
@@ -58,6 +59,14 @@ Open `http://localhost:3000`.
 - `POST /api/v1/tutor`
 - `POST /api/v1/tutor/preview`
 
+## Testing flow
+
+1. Start the backend and frontend.
+2. Upload a TXT or PDF document from the frontend.
+3. Ask a question related to the document.
+4. Confirm that the response reports retrieved chunks.
+5. Restart the backend and verify persistence using the configured SQLite path.
+
 Do not commit API keys, learner data, `.env` files, or local databases.
 
 ## Roadmap
@@ -66,7 +75,9 @@ Do not commit API keys, learner data, `.env` files, or local databases.
 - [x] Document ingestion and chunking
 - [x] Persistent chunk storage
 - [x] Optional embeddings-based retrieval
-- [ ] Next.js document upload workspace
+- [x] Next.js document upload workspace
+- [ ] Document library listing and deletion
+- [ ] Source citations in the UI
 - [ ] PostgreSQL persistence and authentication
 - [ ] Quiz scoring and progress analytics
 - [ ] Automated tests and CI
