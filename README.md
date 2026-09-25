@@ -2,7 +2,7 @@
 
 A production-oriented AI learning workspace built around **Next.js + FastAPI**, designed for Vercel + Render deployment.
 
-## Current milestone: v0.8 — Document workspace
+## Current milestone: v0.9 — RAG validation & reliability
 
 ### Architecture
 
@@ -19,6 +19,8 @@ A production-oriented AI learning workspace built around **Next.js + FastAPI**, 
 - Lexical fallback if the embedding model is unavailable
 - TXT/PDF ingestion through `/api/v1/documents`
 - Retrieval through `/api/v1/retrieve`
+- Input validation for chunk size, overlap, `top_k`, and unknown-query behavior
+- Keyword fallback when semantic embeddings are unavailable
 - Tutor responses grounded in retrieved context
 - Next.js frontend document upload flow
 
@@ -80,4 +82,5 @@ Do not commit API keys, learner data, `.env` files, or local databases.
 - [ ] Source citations in the UI
 - [ ] PostgreSQL persistence and authentication
 - [ ] Quiz scoring and progress analytics
+- [x] RAG validation and regression tests
 - [ ] Automated tests and CI
