@@ -34,9 +34,23 @@ class PersistentRetriever:
         except Exception:
             return None
 
-    def add_document(self, document_id: str, source: str, text: str, chunk_size: int = 1200, overlap: int = 200) -> int:
+    def add_document(
+        self,
+        document_id: str,
+        source: str,
+        text: str,
+        chunk_size: int = 1200,
+        overlap: int = 200,
+    ) -> int:
+        if not document_id.strip():
+            raise ValueError("document_id must not be empty")
+        if not source.strip():
+            raise ValueError("source must not be empty")
+        if not text.strip():
+            raise ValueError("text must not be empty")
         if chunk_size <= 0 or overlap < 0 or overlap >= chunk_size:
             raise ValueError("chunk_size must be positive and overlap must be smaller than chunk_size")
+
         words = text.split()
         step = chunk_size - overlap
         parts: list[str] = []
@@ -46,14 +60,24 @@ class PersistentRetriever:
                 parts.append(part)
             if start + chunk_size >= len(words):
                 break
+
         embeddings = self._encode(parts)
-        chunks = [StoredChunk(document_id, source, i, part, embeddings[i] if embeddings else None) for i, part in enumerate(parts)]
+        chunks = [
+            StoredChunk(document_id, source, i, part, embeddings[i] if embeddings else None)
+            for i, part in enumerate(parts)
+        ]
         return self.store.add_chunks(chunks)
 
     def retrieve(self, query: str, top_k: int = 5) -> list[DocumentChunk]:
+        if not query.strip():
+            raise ValueError("query must not be empty")
+        if top_k <= 0:
+            raise ValueError("top_k must be greater than zero")
+
         stored = self.store.all_chunks()
         if not stored:
             return []
+
         query_embedding = self._encode([query])
         scored: list[tuple[float, StoredChunk]] = []
         query_terms = self._terms(query)
@@ -64,12 +88,19 @@ class PersistentRetriever:
                 score = float(len(query_terms & self._terms(chunk.text)))
             if score > 0:
                 scored.append((score, chunk))
+
         scored.sort(key=lambda item: item[0], reverse=True)
-        return [DocumentChunk(c.document_id, c.source, c.chunk_id, c.text, c.embedding) for _, c in scored[:top_k]]
+        return [
+            DocumentChunk(c.document_id, c.source, c.chunk_id, c.text, c.embedding)
+            for _, c in scored[:top_k]
+        ]
 
     def count(self) -> int:
         return self.store.count()
 
 
 def format_context(chunks: Iterable[DocumentChunk]) -> str:
-    return "\n\n".join(f"[Source: {chunk.source} | Chunk: {chunk.chunk_id}]\n{chunk.text}" for chunk in chunks)
+    return "\n\n".join(
+        f"[Source: {chunk.source} | Chunk: {chunk.chunk_id}]\n{chunk.text}"
+        for chunk in chunks
+    )
