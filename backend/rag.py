@@ -14,6 +14,7 @@ class DocumentChunk:
     chunk_id: int
     text: str
     embedding: list[float] | None = None
+    score: float = 0.0
 
 
 class PersistentRetriever:
@@ -68,11 +69,18 @@ class PersistentRetriever:
         ]
         return self.store.add_chunks(chunks)
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[DocumentChunk]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        min_score: float = 0.0,
+    ) -> list[DocumentChunk]:
         if not query.strip():
             raise ValueError("query must not be empty")
         if top_k <= 0:
             raise ValueError("top_k must be greater than zero")
+        if min_score < 0:
+            raise ValueError("min_score must be non-negative")
 
         stored = self.store.all_chunks()
         if not stored:
@@ -81,18 +89,21 @@ class PersistentRetriever:
         query_embedding = self._encode([query])
         scored: list[tuple[float, StoredChunk]] = []
         query_terms = self._terms(query)
+
         for chunk in stored:
             if query_embedding and chunk.embedding:
                 score = cosine_similarity(query_embedding[0], chunk.embedding)
             else:
-                score = float(len(query_terms & self._terms(chunk.text)))
-            if score > 0:
+                chunk_terms = self._terms(chunk.text)
+                score = len(query_terms & chunk_terms) / max(len(query_terms), 1)
+
+            if score >= min_score and score > 0:
                 scored.append((score, chunk))
 
-        scored.sort(key=lambda item: item[0], reverse=True)
+        scored.sort(key=lambda item: (-item[0], item[1].chunk_id))
         return [
-            DocumentChunk(c.document_id, c.source, c.chunk_id, c.text, c.embedding)
-            for _, c in scored[:top_k]
+            DocumentChunk(c.document_id, c.source, c.chunk_id, c.text, c.embedding, score)
+            for score, c in scored[:top_k]
         ]
 
     def count(self) -> int:
