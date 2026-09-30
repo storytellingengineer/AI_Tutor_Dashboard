@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,16 @@ class RetrievalMetrics:
     recall_at_k: float
     precision_at_k: float
     evaluated_cases: int
+
+    @property
+    def f1_at_k(self) -> float:
+        """Return the harmonic mean of aggregate precision and recall."""
+        if self.precision_at_k + self.recall_at_k == 0:
+            return 0.0
+        return (
+            2 * self.precision_at_k * self.recall_at_k
+            / (self.precision_at_k + self.recall_at_k)
+        )
 
 
 def evaluate_retrieval(
