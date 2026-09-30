@@ -15,6 +15,7 @@ from rag import PersistentRetriever, format_context
 app = FastAPI(title="AI Tutor API", version="0.7.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 retriever = PersistentRetriever()
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 class TutorRequest(BaseModel):
@@ -47,6 +48,8 @@ def health() -> dict:
 async def upload_document(file: UploadFile = File(...)) -> dict:
     raw = await file.read()
     filename = file.filename or "uploaded-document"
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded document exceeds the 10 MB limit")
     try:
         if filename.lower().endswith(".pdf") or file.content_type == "application/pdf":
             reader = PdfReader(io.BytesIO(raw))
