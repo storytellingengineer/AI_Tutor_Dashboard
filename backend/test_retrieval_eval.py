@@ -33,12 +33,31 @@ def test_evaluate_retrieval_calculates_recall_and_precision():
     assert metrics.precision_at_k == pytest.approx(0.75)
 
 
+def test_f1_at_k_is_harmonic_mean_of_precision_and_recall():
+    metrics = evaluate_retrieval(
+        [RetrievalCase("query", frozenset({"doc-1"}))],
+        StubRetriever({"query": ["doc-1", "doc-2"]}),
+    )
+
+    assert metrics.f1_at_k == pytest.approx(2 / 3)
+
+
+def test_f1_at_k_is_zero_when_precision_and_recall_are_zero():
+    metrics = evaluate_retrieval(
+        [RetrievalCase("query", frozenset({"doc-1"}))],
+        StubRetriever({"query": []}),
+    )
+
+    assert metrics.f1_at_k == 0.0
+
+
 def test_empty_cases_return_zero_metrics():
     metrics = evaluate_retrieval([], StubRetriever({}))
 
     assert metrics.evaluated_cases == 0
     assert metrics.recall_at_k == 0.0
     assert metrics.precision_at_k == 0.0
+    assert metrics.f1_at_k == 0.0
 
 
 @pytest.mark.parametrize(
