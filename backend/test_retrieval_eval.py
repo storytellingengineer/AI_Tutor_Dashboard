@@ -1,6 +1,10 @@
 import pytest
 
-from retrieval_eval import RetrievalCase, evaluate_retrieval
+from retrieval_eval import (
+    RetrievalCase,
+    evaluate_retrieval,
+    evaluate_retrieval_detailed,
+)
 
 
 class Result:
@@ -33,6 +37,26 @@ def test_evaluate_retrieval_calculates_recall_and_precision():
     assert metrics.precision_at_k == pytest.approx(0.75)
 
 
+def test_detailed_evaluation_reports_per_query_metrics():
+    retriever = StubRetriever({
+        "rag": ["doc-1", "doc-2"],
+        "agents": ["doc-3"],
+    })
+    cases = [
+        RetrievalCase("rag", frozenset({"doc-1", "doc-4"}), top_k=2),
+        RetrievalCase("agents", frozenset({"doc-3"}), top_k=2),
+    ]
+
+    results = evaluate_retrieval_detailed(cases, retriever)
+
+    assert len(results) == 2
+    assert results[0].query == "rag"
+    assert results[0].recall_at_k == pytest.approx(0.5)
+    assert results[0].precision_at_k == pytest.approx(0.5)
+    assert results[0].f1_at_k == pytest.approx(0.5)
+    assert results[1].f1_at_k == pytest.approx(1.0)
+
+
 def test_f1_at_k_is_harmonic_mean_of_precision_and_recall():
     metrics = evaluate_retrieval(
         [RetrievalCase("query", frozenset({"doc-1"}))],
@@ -58,6 +82,7 @@ def test_empty_cases_return_zero_metrics():
     assert metrics.recall_at_k == 0.0
     assert metrics.precision_at_k == 0.0
     assert metrics.f1_at_k == 0.0
+    assert evaluate_retrieval_detailed([], StubRetriever({})) == ()
 
 
 @pytest.mark.parametrize(
