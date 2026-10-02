@@ -1,0 +1,22 @@
+[
+  {
+    "query": "How does retrieval augmented generation work?",
+    "relevant_document_ids": ["rag-overview"]
+  },
+  {
+    "query": "What is chunk overlap used for?",
+    "relevant_document_ids": ["chunking-guide"]
+  },
+  {
+    "query": "When should semantic search be preferred?",
+    "relevant_document_ids": ["retrieval-guide"]
+  },
+  {
+    "query": "How can hallucinations be detected in RAG?",
+    "relevant_document_ids": ["evaluation-guide"]
+  },
+  {
+    "query": "Why is top-k important for retrieval?",
+    "relevant_document_ids": ["retrieval-guide", "evaluation-guide"]
+  }
+]
